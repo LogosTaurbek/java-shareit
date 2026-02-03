@@ -8,7 +8,7 @@ import java.util.*;
 
 @Component("ItemStorageImpl")
 @Slf4j
-public class ItemStorageImpl implements ItemStorage{
+public class ItemStorageImpl implements ItemStorage {
 
     private final Map<Integer, Item> itemMap = new HashMap<>();
     private int currentId = 0;

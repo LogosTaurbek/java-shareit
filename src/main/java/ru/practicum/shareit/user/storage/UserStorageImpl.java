@@ -11,7 +11,7 @@ import java.util.NoSuchElementException;
 
 @Component("UserStorageImpl")
 @Slf4j
-public class UserStorageImpl implements UserStorage{
+public class UserStorageImpl implements UserStorage {
     private final Map<Integer, User> userMap = new HashMap<>();
     private int currentId = 0;
 
