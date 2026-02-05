@@ -66,8 +66,7 @@ public class UserServiceImpl implements UserService {
     public UserDto updateUser(int userId, UpdateUserRequestDto updateUserRequestDto) {
         log.info("UserServiceImpl:updateUser(): запрос на редактирование пользователя с id={}, новые данные: {}", userId, updateUserRequestDto);
 
-        User userToUpdate = userStorage.getUserById(userId)
-                .orElseThrow(() -> new NoSuchElementException("Пользователя с ID " + userId + " не существует"));
+        User userToUpdate = checkUserExists(userId);
 
         User updatedUser = UserMapper.updateUserFields(userToUpdate, updateUserRequestDto);
 
@@ -78,6 +77,11 @@ public class UserServiceImpl implements UserService {
         updatedUser = userStorage.updateUser(updatedUser);
         log.info("UserServiceImpl:updateUser(): пользователь с id={} отредактирован, новые данные: {}", userId, updatedUser);
         return UserMapper.userToUserDto(updatedUser);
+    }
+
+    private User checkUserExists(int userId) {
+        return userStorage.getUserById(userId)
+                .orElseThrow(() -> new NoSuchElementException("Пользователя с ID " + userId + " не существует"));
     }
 
     @Override

@@ -44,10 +44,7 @@ public class ItemServiceImpl implements ItemService {
 
         validateNewItemRequestDto(newItemRequestDto);
 
-        userStorage.getUserById(sharerUserId)
-                .orElseThrow(() -> new UserNotFoundException(
-                        "Пользователь ID=%s не найден".formatted(sharerUserId)
-                ));
+        checkUserExists(sharerUserId);
 
         Item newItem = ItemMapper.newItemRequestDtoToItem(newItemRequestDto);
         newItem.setOwner(sharerUserId);
@@ -57,6 +54,13 @@ public class ItemServiceImpl implements ItemService {
         log.info("ItemServiceImpl:addItem(): создан новый предмет {}", createdItem);
 
         return ItemMapper.itemToItemDto(createdItem);
+    }
+
+    private void checkUserExists(int userId) {
+        userStorage.getUserById(userId)
+                .orElseThrow(() -> new UserNotFoundException(
+                        "Пользователь ID=%s не найден".formatted(userId)
+                ));
     }
 
     @Override
@@ -80,12 +84,12 @@ public class ItemServiceImpl implements ItemService {
                 sharerUserId,
                 updateItemRequestDto
         );
-        checkIfItemExists(itemId);
-        checkIfItemBelongsToUser(itemId, sharerUserId);
-        Item itemToUpdate = itemStorage.getItemById(itemId)
-                .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
+
+        Item itemToUpdate = checkIfItemBelongsToUser(itemId, sharerUserId);
+
         Item updatedItem = ItemMapper.updateItemFields(itemToUpdate, updateItemRequestDto);
         updatedItem = itemStorage.updateItem(updatedItem);
+
         log.info("ItemServiceImpl:updateItem(): предмет id={} отредактирован, новые данные: {}", itemId, updatedItem);
         return ItemMapper.itemToItemDto(updatedItem);
     }
@@ -102,7 +106,7 @@ public class ItemServiceImpl implements ItemService {
     public List<ItemDto> getAllItemsFromUser(int sharerUserId) {
         log.info("ItemServiceImpl:getAllItemsFromUser(): запрос на получение всех предметов пользователя с id {}", sharerUserId);
 
-        userStorage.getUserById(sharerUserId);
+        checkUserExists(sharerUserId);
 
         List<Item> itemsOfUser = itemStorage.getAllItemsFromUser(sharerUserId);
         return itemsOfUser.stream()
@@ -125,12 +129,7 @@ public class ItemServiceImpl implements ItemService {
                 .toList();
     }
 
-    private void checkIfItemExists(int itemId) {
-        itemStorage.getItemById(itemId)
-                .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
-    }
-
-    private void checkIfItemBelongsToUser(int itemId, int userId) {
+    private Item checkIfItemBelongsToUser(int itemId, int userId) {
         Item item = itemStorage.getItemById(itemId)
                 .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
 
@@ -140,5 +139,7 @@ public class ItemServiceImpl implements ItemService {
                     "Предмет ID=%s не принадлежит пользователю ID=%s".formatted(itemId, userId)
             );
         }
+
+        return item;
     }
 }
