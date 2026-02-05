@@ -29,15 +29,18 @@ public class ItemMapper {
     }
 
     public static Item updateItemFields(Item itemToUpdate, UpdateItemRequestDto updateItemRequestDto) {
-        if (updateItemRequestDto.hasName()) {
+        if (updateItemRequestDto.getName() != null) {
             itemToUpdate.setName(updateItemRequestDto.getName());
         }
-        if (updateItemRequestDto.hasDescription()) {
+
+        if (updateItemRequestDto.getDescription() != null) {
             itemToUpdate.setDescription(updateItemRequestDto.getDescription());
         }
-        if (updateItemRequestDto.hasAvailable()) {
+
+        if (updateItemRequestDto.getAvailable() != null) {
             itemToUpdate.setAvailable(updateItemRequestDto.getAvailable());
         }
+
         return itemToUpdate;
     }
 }

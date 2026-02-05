@@ -5,15 +5,18 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import ru.practicum.shareit.exceptions.ItemDoesNotBelongToUserException;
 import ru.practicum.shareit.exceptions.ItemNotValidException;
+import ru.practicum.shareit.exceptions.UserNotFoundException;
 import ru.practicum.shareit.item.dto.ItemDto;
 import ru.practicum.shareit.item.dto.NewItemRequestDto;
 import ru.practicum.shareit.item.dto.UpdateItemRequestDto;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.storage.ItemStorage;
+import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.storage.UserStorage;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 
 @Service
 @Slf4j
@@ -38,15 +41,29 @@ public class ItemServiceImpl implements ItemService {
                 newItemRequestDto,
                 sharerUserId
         );
+
         validateNewItemRequestDto(newItemRequestDto);
+
         Item newItem = ItemMapper.newItemRequestDtoToItem(newItemRequestDto);
-        if (userStorage.getUserById(sharerUserId) != null) {
-            newItem.setOwner(sharerUserId);
+
+        User user;
+        try {
+            user = userStorage.getUserById(sharerUserId);
+        } catch (NoSuchElementException e) {
+            throw new UserNotFoundException(
+                    "Пользователь ID=%s не найден".formatted(sharerUserId)
+            );
         }
+
+        newItem.setOwner(sharerUserId);
+
         Item createdItem = itemStorage.addItem(newItem);
+
         log.info("ItemServiceImpl:addItem(): создан новый предмет {}", createdItem);
+
         return ItemMapper.itemToItemDto(createdItem);
     }
+
 
     @Override
     public void validateNewItemRequestDto(NewItemRequestDto newItemRequestDto) {
@@ -102,8 +119,13 @@ public class ItemServiceImpl implements ItemService {
     }
 
     private void checkIfItemBelongsToUser(int itemId, int userId) {
-        int ownerId = itemStorage.getItemById(itemId).getOwner();
-        if (userId != ownerId) {
+        Item item = itemStorage.getItemById(itemId);
+        if (item == null) {
+            throw new ItemDoesNotBelongToUserException("Предмет ID=%s не найден".formatted(itemId));
+        }
+
+        Integer ownerId = item.getOwner();
+        if (ownerId == null || !ownerId.equals(userId)) {
             throw new ItemDoesNotBelongToUserException(
                     "Предмет ID=%s не принадлежит пользователю ID=%s".formatted(itemId, userId)
             );
