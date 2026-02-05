@@ -1,14 +1,17 @@
 package ru.practicum.shareit.user.storage;
 
-import ru.practicum.shareit.exceptions.DuplicatedDataException;
 import ru.practicum.shareit.user.model.User;
+
+import java.util.Optional;
 
 public interface UserStorage {
     User addUser(User newUser);
 
-    User getUserById(int userId);
+    Optional<User> getUserById(int userId);
 
-    void checkIfUserExists(User newUser) throws DuplicatedDataException;
+    boolean existsByEmail(String email);
+
+    boolean emailUsedByOtherUser(String email, int userId);
 
     User updateUser(User updatedUser);
 

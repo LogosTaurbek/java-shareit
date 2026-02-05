@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import ru.practicum.shareit.exceptions.ItemDoesNotBelongToUserException;
+import ru.practicum.shareit.exceptions.ItemNotFoundException;
 import ru.practicum.shareit.exceptions.ItemNotValidException;
 import ru.practicum.shareit.exceptions.UserNotFoundException;
 import ru.practicum.shareit.item.dto.ItemDto;
@@ -12,9 +13,9 @@ import ru.practicum.shareit.item.dto.UpdateItemRequestDto;
 import ru.practicum.shareit.item.mapper.ItemMapper;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.storage.ItemStorage;
-import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.storage.UserStorage;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -46,9 +47,8 @@ public class ItemServiceImpl implements ItemService {
 
         Item newItem = ItemMapper.newItemRequestDtoToItem(newItemRequestDto);
 
-        User user;
         try {
-            user = userStorage.getUserById(sharerUserId);
+            userStorage.getUserById(sharerUserId);
         } catch (NoSuchElementException e) {
             throw new UserNotFoundException(
                     "Пользователь ID=%s не найден".formatted(sharerUserId)
@@ -73,7 +73,7 @@ public class ItemServiceImpl implements ItemService {
         if (newItemRequestDto.getDescription() == null || newItemRequestDto.getDescription().isBlank()) {
             throw new ItemNotValidException("Описание вещи не может быть пустым или null");
         }
-        if (newItemRequestDto.getAvailable() == null) {
+        if (newItemRequestDto.getAvailable() == null || newItemRequestDto.getAvailable().isEmpty()) {
             throw new ItemNotValidException("У вещи отсутствует информация о доступности для аренды");
         }
     }
@@ -86,8 +86,10 @@ public class ItemServiceImpl implements ItemService {
                 sharerUserId,
                 updateItemRequestDto
         );
+        checkIfItemExists(itemId);
         checkIfItemBelongsToUser(itemId, sharerUserId);
-        Item itemToUpdate = itemStorage.getItemById(itemId);
+        Item itemToUpdate = itemStorage.getItemById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
         Item updatedItem = ItemMapper.updateItemFields(itemToUpdate, updateItemRequestDto);
         updatedItem = itemStorage.updateItem(updatedItem);
         log.info("ItemServiceImpl:updateItem(): предмет id={} отредактирован, новые данные: {}", itemId, updatedItem);
@@ -97,12 +99,17 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public ItemDto getItemById(int itemId) {
         log.info("ItemServiceImpl:getItemById(): запрос на получение предмета с id {}", itemId);
-        return ItemMapper.itemToItemDto(itemStorage.getItemById(itemId));
+        Item item = itemStorage.getItemById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
+        return ItemMapper.itemToItemDto(item);
     }
 
     @Override
     public List<ItemDto> getAllItemsFromUser(int sharerUserId) {
         log.info("ItemServiceImpl:getAllItemsFromUser(): запрос на получение всех предметов пользователя с id {}", sharerUserId);
+
+        userStorage.getUserById(sharerUserId);
+
         List<Item> itemsOfUser = itemStorage.getAllItemsFromUser(sharerUserId);
         return itemsOfUser.stream()
                 .map(ItemMapper::itemToItemDto)
@@ -112,17 +119,26 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemDto> searchAvailableItems(String searchString) {
         log.info("ItemServiceImpl:searchAvailableItems(): запрос на поиск доступных предметов по запросу {}", searchString);
+
+        if (searchString == null || searchString.isEmpty()) {
+            return new ArrayList<>();
+        }
+
         List<Item> itemSearchResults = itemStorage.searchAvailableItems(searchString);
+
         return itemSearchResults.stream()
                 .map(ItemMapper::itemToItemDto)
                 .toList();
     }
 
+    private void checkIfItemExists(int itemId) {
+        itemStorage.getItemById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
+    }
+
     private void checkIfItemBelongsToUser(int itemId, int userId) {
-        Item item = itemStorage.getItemById(itemId);
-        if (item == null) {
-            throw new ItemDoesNotBelongToUserException("Предмет ID=%s не найден".formatted(itemId));
-        }
+        Item item = itemStorage.getItemById(itemId)
+                .orElseThrow(() -> new ItemNotFoundException("Предмет с ID=%s не найден".formatted(itemId)));
 
         Integer ownerId = item.getOwner();
         if (ownerId == null || !ownerId.equals(userId)) {

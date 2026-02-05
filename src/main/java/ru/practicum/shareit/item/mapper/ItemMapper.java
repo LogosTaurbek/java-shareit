@@ -29,11 +29,11 @@ public class ItemMapper {
     }
 
     public static Item updateItemFields(Item itemToUpdate, UpdateItemRequestDto updateItemRequestDto) {
-        if (updateItemRequestDto.getName() != null) {
+        if (updateItemRequestDto.hasName()) {
             itemToUpdate.setName(updateItemRequestDto.getName());
         }
 
-        if (updateItemRequestDto.getDescription() != null) {
+        if (updateItemRequestDto.hasDescription()) {
             itemToUpdate.setDescription(updateItemRequestDto.getDescription());
         }
 
