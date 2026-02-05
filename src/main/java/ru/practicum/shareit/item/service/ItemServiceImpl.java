@@ -17,7 +17,6 @@ import ru.practicum.shareit.user.storage.UserStorage;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.NoSuchElementException;
 
 @Service
 @Slf4j
@@ -45,16 +44,12 @@ public class ItemServiceImpl implements ItemService {
 
         validateNewItemRequestDto(newItemRequestDto);
 
+        userStorage.getUserById(sharerUserId)
+                .orElseThrow(() -> new UserNotFoundException(
+                        "Пользователь ID=%s не найден".formatted(sharerUserId)
+                ));
+
         Item newItem = ItemMapper.newItemRequestDtoToItem(newItemRequestDto);
-
-        try {
-            userStorage.getUserById(sharerUserId);
-        } catch (NoSuchElementException e) {
-            throw new UserNotFoundException(
-                    "Пользователь ID=%s не найден".formatted(sharerUserId)
-            );
-        }
-
         newItem.setOwner(sharerUserId);
 
         Item createdItem = itemStorage.addItem(newItem);
@@ -63,7 +58,6 @@ public class ItemServiceImpl implements ItemService {
 
         return ItemMapper.itemToItemDto(createdItem);
     }
-
 
     @Override
     public void validateNewItemRequestDto(NewItemRequestDto newItemRequestDto) {

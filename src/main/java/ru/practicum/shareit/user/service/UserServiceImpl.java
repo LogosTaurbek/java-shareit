@@ -32,7 +32,9 @@ public class UserServiceImpl implements UserService {
         validateNewUserRequestDto(newUserRequestDto);
         User newUser = UserMapper.newUserRequestDtoToUser(newUserRequestDto);
 
-        userStorage.existsByEmail(newUser.getEmail());
+        if (userStorage.existsByEmail(newUser.getEmail())) {
+            throw new DuplicatedDataException("Пользователь с email " + newUser.getEmail() + " уже имеется в базе данных");
+        }
 
         User createdUser = userStorage.addUser(newUser);
         log.info("UserServiceImpl:addUser(): создан новый пользователь {}", createdUser);
