@@ -6,8 +6,9 @@ import org.springframework.stereotype.Service;
 import ru.practicum.shareit.booking.model.Booking;
 import ru.practicum.shareit.booking.model.BookingStatus;
 import ru.practicum.shareit.booking.repository.BookingRepository;
+import ru.practicum.shareit.exceptions.CommentNotPossibleException;
 import ru.practicum.shareit.exceptions.DoesNotBelongToUserException;
-import ru.practicum.shareit.exceptions.*;
+import ru.practicum.shareit.exceptions.ItemNotValidException;
 import ru.practicum.shareit.item.dto.*;
 import ru.practicum.shareit.item.mapper.CommentMapper;
 import ru.practicum.shareit.item.mapper.ItemMapper;
@@ -140,7 +141,7 @@ public class ItemServiceImpl implements ItemService {
                 .orElseThrow(() -> new NoSuchElementException("Предмета с ID " + itemId + " не существует"))
                 .getOwnerId();
         if (userId != ownerId) {
-            System.out.println("USERID"+userId+" Onwerid"+ownerId);
+            System.out.println("USERID" + userId + " Onwerid" + ownerId);
             throw new DoesNotBelongToUserException(
                     "Предмет ID=%s не принадлежит пользователю ID=%s".formatted(itemId, userId)
             );
