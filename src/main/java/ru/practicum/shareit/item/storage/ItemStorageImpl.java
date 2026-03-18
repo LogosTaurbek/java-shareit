@@ -44,7 +44,7 @@ public class ItemStorageImpl implements ItemStorage {
     public List<Item> getAllItemsFromUser(int sharerUserId) {
         log.info("ItemStorageImpl:getAllItemsFromUser(): запрос на получение всех предметов пользователя с id {}", sharerUserId);
         return itemMap.values().stream()
-                .filter(item -> item.getOwnerId() == sharerUserId)
+                .filter(item -> item.getOwner().getId() == sharerUserId)
                 .toList();
     }
 

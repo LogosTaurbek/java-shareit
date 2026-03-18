@@ -7,6 +7,7 @@ import ru.practicum.shareit.booking.model.Booking;
 import ru.practicum.shareit.booking.model.BookingStatus;
 import ru.practicum.shareit.booking.repository.BookingRepository;
 import ru.practicum.shareit.exceptions.CommentNotPossibleException;
+import ru.practicum.shareit.exceptions.CommentNotValidException;
 import ru.practicum.shareit.exceptions.DoesNotBelongToUserException;
 import ru.practicum.shareit.exceptions.ItemNotValidException;
 import ru.practicum.shareit.item.dto.*;
@@ -20,9 +21,8 @@ import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.repository.UserRepository;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -43,11 +43,10 @@ public class ItemServiceImpl implements ItemService {
         );
         validateNewItemRequestDto(newItemRequestDto);
         Item newItem = ItemMapper.newItemRequestDtoToItem(newItemRequestDto);
-        if (userRepository.findById(sharerUserId).isPresent()) {
-            newItem.setOwnerId(sharerUserId);
-        } else {
-            throw new NoSuchElementException("Пользователя с ID " + sharerUserId + " не существует");
-        }
+        User sharerUser = findUserOrThrow(sharerUserId);
+
+        newItem.setOwner(sharerUser);
+
         Item createdItem = itemRepository.save(newItem);
         log.info("ItemServiceImpl:addItem(): создан новый предмет {}", createdItem);
         return createItemDto(createdItem, sharerUserId);
@@ -74,9 +73,9 @@ public class ItemServiceImpl implements ItemService {
                 sharerUserId,
                 updateItemRequestDto
         );
-        checkIfItemBelongsToUser(itemId, sharerUserId);
-        Item itemToUpdate = itemRepository.findById(itemId)
-                .orElseThrow(() -> new NoSuchElementException("Предмета с ID " + itemId + " не существует"));
+        Item itemToUpdate = findItemOrThrow(itemId);
+        checkIfItemBelongsToUser(itemToUpdate, sharerUserId);
+
         Item updatedItem = ItemMapper.updateItemFields(itemToUpdate, updateItemRequestDto);
         updatedItem = itemRepository.save(updatedItem);
         log.info("ItemServiceImpl:updateItem(): предмет id={} отредактирован, новые данные: {}", itemId, updatedItem);
@@ -94,9 +93,44 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemDto> getAllItemsFromUser(int sharerUserId) {
         log.info("ItemServiceImpl:getAllItemsFromUser(): запрос на получение всех предметов пользователя с id {}", sharerUserId);
+
+        // Запрос 1: все вещи пользователя
         List<Item> items = itemRepository.findAllByOwnerId(sharerUserId);
+        if (items.isEmpty()) return List.of();
+
+        // Запрос 2: все подтверждённые брони по этим вещам
+        Map<Integer, List<Booking>> bookingsByItemId = bookingRepository
+                .findAllByItemsAndStatusApproved(items)
+                .stream()
+                .collect(Collectors.groupingBy(b -> b.getItem().getId()));
+        Map<Integer, List<Comment>> commentsByItemId = commentRepository
+                .findAllByItemIn(items)
+                .stream()
+                .collect(Collectors.groupingBy(c -> c.getItem().getId()));
+
+        LocalDateTime now = LocalDateTime.now();
+
         return items.stream()
-                .map(item -> createItemDto(item, sharerUserId))
+                .map(item -> {
+                    List<Booking> itemBookings = bookingsByItemId.getOrDefault(item.getId(), List.of());
+
+                    Booking lastBooking = itemBookings.stream()
+                            .filter(b -> !b.getStart().isAfter(now))
+                            .max(Comparator.comparing(Booking::getStart))
+                            .orElse(null);
+
+                    Booking nextBooking = itemBookings.stream()
+                            .filter(b -> b.getStart().isAfter(now))
+                            .min(Comparator.comparing(Booking::getStart))
+                            .orElse(null);
+
+                    List<Comment> comments = commentsByItemId.getOrDefault(item.getId(), List.of());
+                    List<String> commentAuthorNames = comments.stream()
+                            .map(c -> c.getAuthor().getName())
+                            .toList();
+
+                    return ItemMapper.itemToItemDto(item, lastBooking, nextBooking, comments, commentAuthorNames);
+                })
                 .toList();
     }
 
@@ -120,30 +154,26 @@ public class ItemServiceImpl implements ItemService {
                 sharerUserId,
                 newCommentRequestDto
         );
+        if (newCommentRequestDto.getText() == null || newCommentRequestDto.getText().isBlank()) {
+            throw new CommentNotValidException("Текст комментария не может быть пустым или null");
+        }
         if (!bookingRepository.existsByBookerAndItemAndEndBeforeAndStatus(sharerUserId, itemId, LocalDateTime.now(), BookingStatus.APPROVED)) {
             throw new CommentNotPossibleException("Комментирование недоступно.");
         }
-        Comment newComment = new Comment();
-        if (newCommentRequestDto.getText().length() > 1000) {
-            newCommentRequestDto.setText(newCommentRequestDto.getText().substring(0, 1000));
-        }
-        newComment.setText(newCommentRequestDto.getText());
-        newComment.setItem(itemId);
-        newComment.setAuthor(sharerUserId);
-        newComment.setCreated(LocalDateTime.now());
+
+        Item item = findItemOrThrow(itemId);
+        User author = findUserOrThrow(sharerUserId);
+
+        Comment newComment = CommentMapper.newCommentRequestDtoToComment(newCommentRequestDto, item, author);
         Comment createdComment = commentRepository.save(newComment);
-        User commentAuthor = userRepository.findById(createdComment.getAuthor()).orElseThrow();
-        return CommentMapper.commentToCommentDto(createdComment, commentAuthor.getName());
+        return CommentMapper.commentToCommentDto(createdComment, createdComment.getAuthor().getName());
     }
 
-    private void checkIfItemBelongsToUser(int itemId, int userId) {
-        int ownerId = itemRepository.findById(itemId)
-                .orElseThrow(() -> new NoSuchElementException("Предмета с ID " + itemId + " не существует"))
-                .getOwnerId();
+    private void checkIfItemBelongsToUser(Item item, int userId) {
+        int ownerId = item.getOwner().getId();
         if (userId != ownerId) {
-            System.out.println("USERID" + userId + " Onwerid" + ownerId);
             throw new DoesNotBelongToUserException(
-                    "Предмет ID=%s не принадлежит пользователю ID=%s".formatted(itemId, userId)
+                    "Предмет ID=%s не принадлежит пользователю ID=%s".formatted(item.getId(), userId)
             );
         }
     }
@@ -152,16 +182,25 @@ public class ItemServiceImpl implements ItemService {
         LocalDateTime now = LocalDateTime.now();
         Booking lastBooking = null;
         Booking nextBooking = null;
-        if (requestingUserId == item.getOwnerId()) {
+        if (requestingUserId == item.getOwner().getId()) {
             lastBooking = bookingRepository.findLastBookingForItem(item.getId(), now);
             nextBooking = bookingRepository.findNextBookingForItem(item.getId(), now);
         }
-        List<Comment> comments = commentRepository.findAllByItem(item.getId());
+        List<Comment> comments = commentRepository.findAllByItemId(item.getId());
         List<String> commentAuthorNames = comments.stream()
                 .map(Comment::getAuthor)
-                .map(authorId -> userRepository.findById(authorId).orElseThrow())
                 .map(User::getName)
                 .toList();
         return ItemMapper.itemToItemDto(item, lastBooking, nextBooking, comments, commentAuthorNames);
+    }
+
+    private User findUserOrThrow(int userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("Пользователя с ID " + userId + " не существует"));
+    }
+
+    private Item findItemOrThrow(int itemId) {
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new NoSuchElementException("Вещи с ID " + itemId + " не существует"));
     }
 }

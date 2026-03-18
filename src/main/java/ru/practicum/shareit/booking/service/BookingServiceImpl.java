@@ -32,21 +32,26 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public BookingDto addBooking(int bookerUserId, NewBookingRequestDto newBookingRequestDto) {
+        User bookerUser = findUserOrThrow(bookerUserId);
         log.info(
                 "BookingServiceImpl:addBooking(): запрос на создание нового бронирования {} от пользователя с id={}",
                 newBookingRequestDto,
-                bookerUserId
+                bookerUser
         );
-        checkIfUserExists(bookerUserId);
+
+        Item item = findItemOrThrow(newBookingRequestDto.getItemId());
+
         validateNewBookingRequestDto(newBookingRequestDto);
-        Booking newBooking = BookingMapper.newBookingRequestDtoToBooking(newBookingRequestDto);
-        newBooking.setBooker(bookerUserId);
+
+        Booking newBooking = BookingMapper.newBookingRequestDtoToBooking(newBookingRequestDto, item, bookerUser);
+        newBooking.setBooker(bookerUser);
+        newBooking.setItem(item);
         newBooking.setStatus(BookingStatus.WAITING);
+
         Booking createdBooking = bookingRepository.save(newBooking);
         log.info("BookingServiceImpl:addBooking(): создано новое бронирование {}", createdBooking);
-        User booker = userRepository.findById(bookerUserId).orElseThrow();
-        Item item = itemRepository.findById(newBooking.getItem()).orElseThrow();
-        return BookingMapper.bookingToBookingDto(createdBooking, booker, item);
+
+        return BookingMapper.bookingToBookingDto(createdBooking);
     }
 
     @Override
@@ -57,26 +62,27 @@ public class BookingServiceImpl implements BookingService {
                 ownerUserId,
                 isApproved
         );
-        Booking booking = bookingRepository.findById(bookingId).orElseThrow();
-        int itemId = booking.getItem();
+        Booking booking = fingBookingOrThrow(bookingId);
+        Item item = booking.getItem();
+        int itemId = item.getId();
+
         if (!itemBelongsToUser(itemId, ownerUserId)) {
             throw new DoesNotBelongToUserException("Вещь с ID={" + itemId + "} не принадлежит пользователю с ID={" + ownerUserId + "}");
         }
-        if (isApproved) {
-            booking.setStatus(BookingStatus.APPROVED);
-        } else {
-            booking.setStatus(BookingStatus.REJECTED);
+
+        if (booking.getStatus() != BookingStatus.WAITING) {
+            throw new BookingNotValidException("Нельзя изменить статус бронирования, которое уже обработано");
         }
+        booking.setStatus(isApproved ? BookingStatus.APPROVED : BookingStatus.REJECTED);
         Booking savedBooking = bookingRepository.save(booking);
+
         log.info(
                 "BookingServiceImpl:approveBooking(): выполнен запрос на подтверждение бронирования с ID={} от пользователя с ID={} approved={}",
                 bookingId,
                 ownerUserId,
                 isApproved
         );
-        User booker = userRepository.findById(savedBooking.getBooker()).orElseThrow();
-        Item item = itemRepository.findById(savedBooking.getItem()).orElseThrow();
-        return BookingMapper.bookingToBookingDto(savedBooking, booker, item);
+        return BookingMapper.bookingToBookingDto(savedBooking);
     }
 
     @Override
@@ -86,15 +92,16 @@ public class BookingServiceImpl implements BookingService {
                 bookingId,
                 sharerUserId
         );
-        Booking booking = bookingRepository.findById(bookingId).orElseThrow();
-        Item item = itemRepository.findById(booking.getItem()).orElseThrow();
-        if (sharerUserId != booking.getBooker() && sharerUserId != item.getOwnerId()) {
+        Booking booking = fingBookingOrThrow(bookingId);
+        Item item = booking.getItem();
+        User booker = booking.getBooker();
+
+        if (sharerUserId != booker.getId() && sharerUserId != item.getOwner().getId()) {
             throw new DoesNotBelongToUserException(
                     "Запрошенное бронирование с ID=" + bookingId + " никак не связано с пользователем с ID=" + sharerUserId
             );
         }
-        User booker = userRepository.findById(booking.getBooker()).orElseThrow();
-        return BookingMapper.bookingToBookingDto(booking, booker, item);
+        return BookingMapper.bookingToBookingDto(booking);
     }
 
     @Override
@@ -115,11 +122,7 @@ public class BookingServiceImpl implements BookingService {
             case REJECTED -> bookingRepository.findByOwnerIdAndStatus(ownerId, BookingStatus.REJECTED);
         };
         return bookings.stream()
-                .map(booking -> {
-                    User booker = userRepository.findById(booking.getBooker()).orElseThrow();
-                    Item item = itemRepository.findById(booking.getItem()).orElseThrow();
-                    return BookingMapper.bookingToBookingDto(booking, booker, item);
-                })
+                .map(BookingMapper::bookingToBookingDto)
                 .toList();
     }
 
@@ -143,24 +146,23 @@ public class BookingServiceImpl implements BookingService {
                     bookingRepository.findAllByBookerAndStatusOrderByStartDesc(bookerId, BookingStatus.REJECTED);
         };
         return bookings.stream()
-                .map(booking -> {
-                    User booker = userRepository.findById(booking.getBooker()).orElseThrow();
-                    Item item = itemRepository.findById(booking.getItem()).orElseThrow();
-                    return BookingMapper.bookingToBookingDto(booking, booker, item);
-                })
+                .map(BookingMapper::bookingToBookingDto)
                 .toList();
     }
 
-    private void checkIfUserExists(int userId) {
-        if (userRepository.findById(userId).isEmpty()) {
-            throw new NoSuchElementException("Пользователя с ID " + userId + " не существует");
-        }
+    private User findUserOrThrow(int userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("Пользователя с ID " + userId + " не существует"));
     }
 
-    private void checkIfItemExists(int itemId) {
-        if (itemRepository.findById(itemId).isEmpty()) {
-            throw new NoSuchElementException("Вещи с ID " + itemId + " не существует");
-        }
+    private Item findItemOrThrow(int itemId) {
+        return itemRepository.findById(itemId)
+                .orElseThrow(() -> new NoSuchElementException("Вещи с ID " + itemId + " не существует"));
+    }
+
+    private Booking fingBookingOrThrow(int bookingId) {
+        return bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NoSuchElementException("Вещи с ID " + bookingId + " не существует"));
     }
 
     private void checkIfItemAvailable(int itemId) {
@@ -179,12 +181,11 @@ public class BookingServiceImpl implements BookingService {
         if (newBookingRequestDto.getItemId() == null) {
             throw new BookingNotValidException("Вещь не может быть равна null");
         }
-        checkIfItemExists(newBookingRequestDto.getItemId());
         checkIfItemAvailable(newBookingRequestDto.getItemId());
     }
 
     private boolean itemBelongsToUser(int itemId, int userId) {
         Item item = itemRepository.findById(itemId).orElseThrow();
-        return item.getOwnerId() == userId;
+        return item.getOwner().getId() == userId;
     }
 }

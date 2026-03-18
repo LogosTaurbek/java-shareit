@@ -23,17 +23,17 @@ public class ItemMapper {
         itemDto.setName(item.getName());
         itemDto.setDescription(item.getDescription());
         itemDto.setAvailable(item.isAvailable());
-        itemDto.setOwner(item.getOwnerId());
+        itemDto.setOwner(item.getOwner().getId());
         itemDto.setRequest(item.getRequestId());
         if (previousBooking != null) {
             itemDto.setLastBooking(new BookingShortDto(
                     previousBooking.getId(), previousBooking.getStart(),
-                    previousBooking.getEnd(), previousBooking.getBooker()));
+                    previousBooking.getEnd(), previousBooking.getId()));
         }
         if (nextBooking != null) {
             itemDto.setNextBooking(new BookingShortDto(
                     nextBooking.getId(), nextBooking.getStart(),
-                    nextBooking.getEnd(), nextBooking.getBooker()));
+                    nextBooking.getEnd(), nextBooking.getId()));
         }
         List<CommentDto> commentDtos = new ArrayList<>();
         for (int i = 0; i < comments.size(); i++) {

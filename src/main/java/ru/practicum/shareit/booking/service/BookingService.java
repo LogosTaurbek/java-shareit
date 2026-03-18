@@ -7,7 +7,7 @@ import ru.practicum.shareit.booking.model.BookingStatusRequestParam;
 import java.util.List;
 
 public interface BookingService {
-    BookingDto addBooking(int bookerUserId, NewBookingRequestDto newBookingRequestDto);
+    BookingDto addBooking(int bookerUser, NewBookingRequestDto newBookingRequestDto);
 
     BookingDto approveBooking(int bookingId, int ownerUserId, boolean isApproved);
 
