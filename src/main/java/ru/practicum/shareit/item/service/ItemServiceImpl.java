@@ -94,11 +94,9 @@ public class ItemServiceImpl implements ItemService {
     public List<ItemDto> getAllItemsFromUser(int sharerUserId) {
         log.info("ItemServiceImpl:getAllItemsFromUser(): запрос на получение всех предметов пользователя с id {}", sharerUserId);
 
-        // Запрос 1: все вещи пользователя
         List<Item> items = itemRepository.findAllByOwnerId(sharerUserId);
         if (items.isEmpty()) return List.of();
 
-        // Запрос 2: все подтверждённые брони по этим вещам
         Map<Integer, List<Booking>> bookingsByItemId = bookingRepository
                 .findAllByItemsAndStatusApproved(items)
                 .stream()
@@ -140,9 +138,44 @@ public class ItemServiceImpl implements ItemService {
         if (searchString == null || searchString.isEmpty()) {
             return new ArrayList<>();
         }
-        List<Item> itemSearchResults = itemRepository.searchAvailableItems(searchString);
-        return itemSearchResults.stream()
-                .map(item -> createItemDto(item, requestingUserId))
+
+        List<Item> items = itemRepository.searchAvailableItems(searchString);
+        if (items.isEmpty()) return List.of();
+
+        Map<Integer, List<Booking>> bookingsByItemId = bookingRepository
+                .findAllByItemsAndStatusApproved(items)
+                .stream()
+                .collect(Collectors.groupingBy(b -> b.getItem().getId()));
+
+        Map<Integer, List<Comment>> commentsByItemId = commentRepository
+                .findAllByItemIn(items)
+                .stream()
+                .collect(Collectors.groupingBy(c -> c.getItem().getId()));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        return items.stream()
+                .map(item -> {
+                    List<Booking> itemBookings = bookingsByItemId.getOrDefault(item.getId(), List.of());
+
+                    Booking lastBooking = itemBookings.stream()
+                            .filter(b -> !b.getStart().isAfter(now))
+                            .max(Comparator.comparing(Booking::getStart))
+                            .orElse(null);
+
+                    Booking nextBooking = itemBookings.stream()
+                            .filter(b -> b.getStart().isAfter(now))
+                            .min(Comparator.comparing(Booking::getStart))
+                            .orElse(null);
+
+                    List<Comment> comments = commentsByItemId.getOrDefault(item.getId(), List.of());
+                    List<String> commentAuthorNames = comments.stream()
+                            .map(Comment::getAuthor)
+                            .map(User::getName)
+                            .toList();
+
+                    return ItemMapper.itemToItemDto(item, lastBooking, nextBooking, comments, commentAuthorNames);
+                })
                 .toList();
     }
 
