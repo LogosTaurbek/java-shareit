@@ -50,6 +50,7 @@ public class ItemMapper {
         if (newItemRequestDto.getAvailable().isPresent()) {
             item.setAvailable(newItemRequestDto.getAvailable().get());
         }
+        item.setRequestId(newItemRequestDto.getRequest());
         return item;
     }
 
