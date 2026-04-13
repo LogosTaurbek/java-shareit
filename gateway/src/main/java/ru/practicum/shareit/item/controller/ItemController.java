@@ -13,6 +13,8 @@ import ru.practicum.shareit.item.dto.NewItemRequestDto;
 import ru.practicum.shareit.item.dto.UpdateItemRequestDto;
 import ru.practicum.shareit.item.util.HttpHeaderConstants;
 
+import java.util.Collections;
+
 @Controller
 @RequestMapping("/items")
 @RequiredArgsConstructor
@@ -39,7 +41,7 @@ public class ItemController {
     public ResponseEntity<Object> updateItem(
             @RequestHeader(HttpHeaderConstants.X_SHARER_USER_ID) long userId,
             @PathVariable int itemId,
-            @RequestBody @Valid UpdateItemRequestDto updateItemRequestDto
+            @RequestBody UpdateItemRequestDto updateItemRequestDto
     ) {
         log.info(
                 "ItemController:updateItem(): запрос на обновление предмета ID={} от пользователя ID={}. Новые данные: {}",
@@ -79,6 +81,9 @@ public class ItemController {
                 searchString,
                 userId
         );
+        if (searchString == null || searchString.isBlank()) {
+            return ResponseEntity.ok(Collections.emptyList());
+        }
         return itemClient.searchAvailableItems(userId, searchString);
     }
 

@@ -17,6 +17,7 @@ import ru.practicum.shareit.item.model.Comment;
 import ru.practicum.shareit.item.model.Item;
 import ru.practicum.shareit.item.repository.CommentRepository;
 import ru.practicum.shareit.item.repository.ItemRepository;
+import ru.practicum.shareit.request.repository.ItemRequestRepository;
 import ru.practicum.shareit.user.model.User;
 import ru.practicum.shareit.user.repository.UserRepository;
 
@@ -33,6 +34,7 @@ public class ItemServiceImpl implements ItemService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final CommentRepository commentRepository;
+    private final ItemRequestRepository itemRequestRepository;
 
     @Override
     public ItemDto addItem(int sharerUserId, NewItemRequestDto newItemRequestDto) {
@@ -42,6 +44,10 @@ public class ItemServiceImpl implements ItemService {
                 sharerUserId
         );
         validateNewItemRequestDto(newItemRequestDto);
+        if (newItemRequestDto.getRequest() != null) {
+            itemRequestRepository.findById(newItemRequestDto.getRequest())
+                    .orElseThrow(() -> new NoSuchElementException("Запроса с ID " + newItemRequestDto.getRequest() + " не существует"));
+        }
         Item newItem = ItemMapper.newItemRequestDtoToItem(newItemRequestDto);
         User sharerUser = findUserOrThrow(sharerUserId);
 
@@ -135,9 +141,6 @@ public class ItemServiceImpl implements ItemService {
     @Override
     public List<ItemDto> searchAvailableItems(String searchString, int requestingUserId) {
         log.info("ItemServiceImpl:searchAvailableItems(): запрос на поиск доступных предметов по запросу {}", searchString);
-        if (searchString == null || searchString.isEmpty()) {
-            return new ArrayList<>();
-        }
 
         List<Item> items = itemRepository.searchAvailableItems(searchString);
         if (items.isEmpty()) return List.of();

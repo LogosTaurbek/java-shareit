@@ -54,6 +54,17 @@ class BookingControllerTest {
     }
 
     @Test
+    void bookItem_InvalidDates_ReturnsBadRequest() throws Exception {
+        BookItemRequestDto invalidDto = new BookItemRequestDto(1L, LocalDateTime.now().plusHours(2), LocalDateTime.now().plusHours(1));
+
+        mockMvc.perform(post("/bookings")
+                        .header("X-Sharer-User-Id", 1)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidDto)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void approveBooking_ValidData_ReturnsOk() throws Exception {
         when(bookingClient.approveBooking(anyLong(), anyLong(), anyBoolean()))
                 .thenReturn(new ResponseEntity<>(HttpStatus.OK));

@@ -172,15 +172,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void validateNewBookingRequestDto(NewBookingRequestDto newBookingRequestDto) {
-        if (newBookingRequestDto.getStart().isBefore(LocalDateTime.now())) {
-            throw new BookingNotValidException("Дата начала бронирования находится в прошлом.");
-        }
-        if (!newBookingRequestDto.getEnd().isAfter(newBookingRequestDto.getStart())) {
-            throw new BookingNotValidException("Дата окончания бронирования находится раньше даты начала бронирования.");
-        }
-        if (newBookingRequestDto.getItemId() == null) {
-            throw new BookingNotValidException("Вещь не может быть равна null");
-        }
         checkIfItemAvailable(newBookingRequestDto.getItemId());
     }
 

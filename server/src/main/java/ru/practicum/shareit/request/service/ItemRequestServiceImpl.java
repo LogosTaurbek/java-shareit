@@ -14,7 +14,10 @@ import ru.practicum.shareit.request.repository.ItemRequestRepository;
 import ru.practicum.shareit.request.service.ItemRequestService;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,9 +42,7 @@ public class ItemRequestServiceImpl implements ItemRequestService {
     public List<ItemRequestDto> getRequestsOfUser(int requesterId) {
         log.info("ItemRequestServiceImpl:getRequestsOfUser(): запрос на получение списка запросов пользователя с id={}", requesterId);
         List<ItemRequest> requests = itemRequestRepository.findByRequesterIdOrderByCreatedDesc(requesterId);
-        List<ItemRequestDto> requestDtos = requests.stream()
-                .map(this::convertToDtoWithItems)
-                .toList();
+        List<ItemRequestDto> requestDtos = enrichRequestsWithItems(requests);
         log.info("ItemRequestServiceImpl:getRequestsOfUser(): получено {} запросов", requestDtos.size());
         return requestDtos;
     }
@@ -50,9 +51,7 @@ public class ItemRequestServiceImpl implements ItemRequestService {
     public List<ItemRequestDto> getAllRequests(int requesterId) {
         log.info("ItemRequestServiceImpl:getAllRequests(): запрос на получение всех запросов других пользователей");
         List<ItemRequest> requests = itemRequestRepository.findAllByRequesterIdNotOrderByCreatedDesc(requesterId);
-        List<ItemRequestDto> requestDtos = requests.stream()
-                .map(this::convertToDtoWithItems)
-                .toList();
+        List<ItemRequestDto> requestDtos = enrichRequestsWithItems(requests);
         log.info("ItemRequestServiceImpl:getAllRequests(): получено {} запросов", requestDtos.size());
         return requestDtos;
     }
@@ -65,6 +64,28 @@ public class ItemRequestServiceImpl implements ItemRequestService {
         ItemRequestDto dto = convertToDtoWithItems(request);
         log.info("ItemRequestServiceImpl:getRequestById(): получен запрос с id={}", requestId);
         return dto;
+    }
+
+    private List<ItemRequestDto> enrichRequestsWithItems(List<ItemRequest> requests) {
+        if (requests.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Integer> requestIds = requests.stream()
+                .map(ItemRequest::getId)
+                .toList();
+        List<Item> items = itemRepository.findAllByRequestIdIn(requestIds);
+        Map<Integer, List<ItemForRequestDto>> itemsByRequestId = items.stream()
+                .collect(Collectors.groupingBy(
+                        Item::getRequestId,
+                        Collectors.mapping(this::convertItemToItemForRequestDto, Collectors.toList())
+                ));
+        return requests.stream()
+                .map(request -> {
+                    ItemRequestDto dto = ItemRequestMapper.itemRequestToItemRequestDto(request);
+                    dto.setItems(itemsByRequestId.getOrDefault(request.getId(), Collections.emptyList()));
+                    return dto;
+                })
+                .toList();
     }
 
     private ItemRequestDto convertToDtoWithItems(ItemRequest request) {
